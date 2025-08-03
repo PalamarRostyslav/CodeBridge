@@ -5,7 +5,7 @@ class CodeValidator:
     """Utility class for validating Python code."""
 
     @staticmethod
-    def is_valid_python_code(code: str) -> Tuple[bool, str]:
+    def validate_python_code(code: str) -> Tuple[bool, str]:
         """
         Validate if the provided code is valid Python code.
 
