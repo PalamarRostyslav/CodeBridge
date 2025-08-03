@@ -33,6 +33,7 @@ class PythonExecutor(BaseExecutor):
             # Create a restricted global environment
             safe_globals = {
                 '__builtins__': {
+                    # Essential functions
                     'print': print,
                     'len': len,
                     'range': range,
@@ -52,16 +53,41 @@ class PythonExecutor(BaseExecutor):
                     'zip': zip,
                     'abs': abs,
                     'round': round,
+                    
+                    # Class and object support
+                    '__build_class__': __build_class__,
+                    'type': type,
+                    'object': object,
+                    'property': property,
+                    'staticmethod': staticmethod,
+                    'classmethod': classmethod,
+                    'super': super,
+                    'isinstance': isinstance,
+                    'issubclass': issubclass,
+                    'hasattr': hasattr,
+                    'getattr': getattr,
+                    'setattr': setattr,
+                    'delattr': delattr,
+                    
+                    # Flow control
+                    'iter': iter,
+                    'next': next,
+                    'any': any,
+                    'all': all,
+                    
+                    # Common constants
+                    'None': None,
+                    'True': True,
+                    'False': False,
+                    '__name__': '__main__',
                 }
             }
             
-            # Execute with output capture
             with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
                 exec(code, safe_globals)
             
             execution_time = time.time() - start_time
             
-            # Get captured output
             output = stdout_capture.getvalue()
             error = stderr_capture.getvalue()
             
@@ -100,8 +126,6 @@ class PythonExecutor(BaseExecutor):
         try:
             # Create temporary Python file
             temp_file = self.file_manager.create_temp_file(code, '.py')
-            
-            # Execute using subprocess
             result = subprocess.run(
                 [sys.executable, temp_file],
                 capture_output=True,
@@ -135,7 +159,6 @@ class PythonExecutor(BaseExecutor):
                 execution_time=execution_time
             )
         finally:
-            # Cleanup
             if temp_file:
                 self.file_manager.cleanup_temp_file(temp_file)
     

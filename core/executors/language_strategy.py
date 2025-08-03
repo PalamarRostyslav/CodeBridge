@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any
 import os
 
+
 class LanguageStrategy(ABC):
     """Abstract base class for language-specific execution strategies."""
     
@@ -130,7 +131,6 @@ class CsharpStrategy(LanguageStrategy):
         # Wrap code if needed
         program_cs_content = self._wrap_code(code)
         
-        # Write Program.cs
         program_file = os.path.join(temp_dir, "Program.cs")
         with open(program_file, 'w', encoding='utf-8') as f:
             f.write(program_cs_content)
@@ -141,7 +141,8 @@ class CsharpStrategy(LanguageStrategy):
             <OutputType>Exe</OutputType>
             <TargetFramework>net8.0</TargetFramework>
             <ImplicitUsings>enable</ImplicitUsings>
-            <Nullable>enable</Nullable>
+            <Nullable>disable</Nullable>
+            <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
         </PropertyGroup>
         </Project>'''
         
@@ -160,24 +161,28 @@ class CsharpStrategy(LanguageStrategy):
     
     def _wrap_code(self, code: str) -> str:
         """Wrap C# code in proper Main method if needed."""
-        if "static void Main" in code or "class " in code:
+        
+        if "static void Main" in code:
             return code
         
-        wrapped_code = f'''using System;
-            using System.Collections.Generic;
-            using System.Linq;
-
-            namespace Program
-            {{
-                class Program
-                {{
-                    static void Main(string[] args)
-                    {{
-            {self._indent_code(code, 12)}
-                    }}
-                }}
-            }}'''
+        if "class " in code and "Main" in code:
+            return code
             
+        # If it's just a class definition without Main, or procedural code, wrap it
+        wrapped_code = f'''using System;
+        using System.Collections.Generic;
+        using System.Linq;
+
+        namespace Program
+        {{
+            class Program
+            {{
+                static void Main(string[] args)
+                {{
+        {self._indent_code(code, 12)}
+                }}
+            }}
+        }}'''
         return wrapped_code
     
     def _indent_code(self, code: str, spaces: int) -> str:

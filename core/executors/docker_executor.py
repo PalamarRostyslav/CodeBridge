@@ -38,20 +38,15 @@ class DockerExecutor(BaseDockerExecutor):
             language_config = self.get_language_config(language)
             strategy = self.strategy_factory.create_strategy(language, language_config)
             
-            # Create temporary directory
             temp_dir = self._create_temp_directory()
-            
-            # Prepare code using language strategy
             prep_info = strategy.prepare_code(code, temp_dir)
             
-            # Get execution command
             command = strategy.get_execution_command(prep_info)
             
             # Ensure Docker image is available
             image = strategy.get_image()
             self._ensure_image_available(image)
             
-            # Create and run container
             container = self._create_container(
                 image=image,
                 command=command,
@@ -59,7 +54,6 @@ class DockerExecutor(BaseDockerExecutor):
                 working_dir=strategy.get_working_dir()
             )
             
-            # Wait for completion and get results
             result = self._wait_for_container(container, strategy.get_timeout())
             
             return result
@@ -75,12 +69,10 @@ class DockerExecutor(BaseDockerExecutor):
             )
             
         except Exception as e:
-            # Any other execution error
             execution_time = time.time() - start_time
             return self._handle_execution_error(e, execution_time)
             
         finally:
-            # Always cleanup temporary directory
             if temp_dir:
                 self._cleanup_temp_directory(temp_dir)
     

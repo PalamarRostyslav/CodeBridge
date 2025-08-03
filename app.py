@@ -78,7 +78,6 @@ class CodeConverterApp:
     ) -> str:
         """Convert Python code to target language using selected model."""
         try:
-            # Validate input
             if not python_code.strip():
                 return "❌ **Error:** Please provide Python code to convert."
             
@@ -122,12 +121,10 @@ class CodeConverterApp:
             if not python_code.strip():
                 return "❌ **Error:** Please provide Python code to execute."
             
-            # Validate Python syntax
             is_valid, error_msg = self.validator.validate_python_code(python_code)
             if not is_valid:
                 return f"❌ **Invalid Python Code:** {error_msg}"
             
-            # Execute the code
             result = self.python_executor.execute(python_code)
             return result.format_results()
             
@@ -140,7 +137,6 @@ class CodeConverterApp:
             if not converted_code.strip():
                 return "❌ **Error:** No converted code to execute."
             
-            # Clean the converted code (remove markdown formatting if present)
             code = self._clean_code_output(converted_code)
             
             if not self.docker_executor.is_available():
@@ -164,10 +160,8 @@ class CodeConverterApp:
             if not converted_code.strip():
                 return "❌ **Error:** No code to save."
             
-            # Clean the converted code
             code = self._clean_code_output(converted_code)
             
-            # Save to file
             filepath = self.file_manager.save_code_to_file(code, target_language)
             return f"✅ **File Saved Successfully**\n\nSaved to: `{filepath}`"
             
@@ -181,7 +175,6 @@ class CodeConverterApp:
         in_code_block = False
         
         for line in lines:
-            # Skip status messages
             if line.strip().startswith(('✅', '❌', '**Error:**', '**Conversion')):
                 continue
             
@@ -244,9 +237,8 @@ class CodeConverterApp:
                     # Input section
                     gr.Markdown("## 📝 Input")
                     
-                    python_input = gr.Textbox(
+                    python_input = gr.Code(
                         label="Python Code",
-                        placeholder="Enter your Python code here...",
                         lines=10,
                         elem_classes=["code-input"]
                     )
@@ -288,7 +280,7 @@ class CodeConverterApp:
                         label="Converted Code",
                         lines=12,
                         elem_classes=["code-output"],
-                        interactive=False
+                        interactive=True
                     )
                     
                     with gr.Row():

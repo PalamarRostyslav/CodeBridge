@@ -98,12 +98,9 @@ class BaseDockerExecutor(BaseExecutor):
             exit_info = container.wait(timeout=timeout)
             exit_code = exit_info['StatusCode']
             
-            # Get logs
             logs = container.logs(stdout=True, stderr=True).decode('utf-8')
             
             execution_time = time.time() - start_time
-            
-            # Success if exit code is 0
             success = exit_code == 0
             
             if success:
@@ -146,7 +143,7 @@ class BaseDockerExecutor(BaseExecutor):
         try:
             container.remove(force=True)
         except Exception:
-            pass  # Ignore cleanup errors
+            pass
     
     def _create_temp_directory(self) -> str:
         """Create temporary directory for code execution."""
@@ -158,7 +155,7 @@ class BaseDockerExecutor(BaseExecutor):
             if temp_dir and os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
         except Exception:
-            pass  # Ignore cleanup errors
+            pass
     
     def _handle_execution_error(self, error: Exception, execution_time: float) -> ExecutionResult:
         """
