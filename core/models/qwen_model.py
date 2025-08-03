@@ -51,7 +51,7 @@ class QwenModel(BaseCodeModel):
             self.model = None
             self.tokenizer = None
     
-    def convert_code(self, python_code: str, target_language: str, add_comments: bool = False) -> str:
+    def convert_code(self, python_code: str, target_language: str, add_comments: bool = False, stream: bool = False) -> str:
         """Convert Python code using Qwen model."""
         if not self.is_available():
             raise Exception("Qwen model is not available. Please check your CUDA setup and model installation.")
@@ -88,35 +88,80 @@ class QwenModel(BaseCodeModel):
             except Exception as e:
                 raise Exception(f"Tokenization failed: {str(e)}. Input type: {type(text)}")
             
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=2048,
-                    temperature=0.1,
-                    top_p=0.9,
-                    do_sample=True,
-                    pad_token_id=self.tokenizer.eos_token_id,
-                    eos_token_id=self.tokenizer.eos_token_id
-                )
-            
-            # Decode response
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
-            # Extract only the assistant's response
-            if "<|im_start|>assistant" in response:
-                assistant_start = response.find("<|im_start|>assistant")
-                response = response[assistant_start + len("<|im_start|>assistant"):]
-                if "<|im_end|>" in response:
-                    response = response[:response.find("<|im_end|>")]
-            
-            response = response.strip()
-            if response.startswith("\n"):
-                response = response[1:]
-            
-            return response
+            if stream:
+                return self._generate_streaming(inputs)
+            else:
+                return self._generate_complete(inputs)
             
         except Exception as e:
             raise Exception(f"Qwen model generation failed: {str(e)}")
+    
+    def _generate_streaming(self, inputs):
+        """Generate with streaming support."""
+        from transformers import TextIteratorStreamer
+        from threading import Thread
+        
+        # Create streamer
+        streamer = TextIteratorStreamer(
+            self.tokenizer,
+            skip_prompt=True,
+            skip_special_tokens=True
+        )
+        
+        # Generation parameters
+        generation_kwargs = {
+            **inputs,
+            "max_new_tokens": 2048,
+            "temperature": 0.1,
+            "top_p": 0.9,
+            "do_sample": True,
+            "pad_token_id": self.tokenizer.eos_token_id,
+            "eos_token_id": self.tokenizer.eos_token_id,
+            "streamer": streamer
+        }
+        
+        # Start generation in separate thread
+        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
+        thread.start()
+        
+        # Collect streamed tokens
+        generated_text = ""
+        for new_text in streamer:
+            generated_text += new_text
+            yield generated_text
+        
+        thread.join()
+    
+    def _generate_complete(self, inputs):
+        """Generate complete response at once."""
+        # Generate
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=2048,
+                temperature=0.1,
+                top_p=0.9,
+                do_sample=True,
+                pad_token_id=self.tokenizer.eos_token_id,
+                eos_token_id=self.tokenizer.eos_token_id
+            )
+        
+        # Decode response
+        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        
+        # Extract only the assistant's response
+        if "<|im_start|>assistant" in response:
+            assistant_start = response.find("<|im_start|>assistant")
+            response = response[assistant_start + len("<|im_start|>assistant"):]
+            if "<|im_end|>" in response:
+                response = response[:response.find("<|im_end|>")]
+        
+        # Clean up the response
+        response = response.strip()
+        if response.startswith("\n"):
+            response = response[1:]
+        
+        return response
     
     def is_available(self) -> bool:
         """Check if Qwen model is properly loaded."""

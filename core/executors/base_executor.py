@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Tuple, Dict, Any
+from typing import Dict, Any
 import time
 
 class ExecutionResult:
@@ -20,7 +20,7 @@ class ExecutionResult:
             "execution_time": self.execution_time
         }
     
-    def format_results(self) -> str:
+    def format_result(self) -> str:
         """Format result for display."""
         result = f"⏱️ Execution Time: {self.execution_time:.3f}s\n\n"
         
@@ -39,7 +39,7 @@ class ExecutionResult:
 
 class BaseExecutor(ABC):
     @abstractmethod
-    def execute(self, code: str, language: str) -> str:
+    def execute(self, code: str, language: str = None) -> ExecutionResult:
         """
         Execute the provided code.
         

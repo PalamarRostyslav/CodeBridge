@@ -12,7 +12,7 @@ class ClaudeModel(BaseCodeModel):
         if api_key:
             self.client = Anthropic(api_key=api_key)
     
-    def convert_code(self, python_code: str, target_language: str, add_comments: bool = False) -> str:
+    def convert_code(self, python_code: str, target_language: str, add_comments: bool = False, stream: bool = False) -> str:
         """Convert Python code using Claude API."""
         if not self.is_available():
             raise Exception("Claude API key is required but not provided.")
@@ -20,22 +20,47 @@ class ClaudeModel(BaseCodeModel):
         prompt = self._create_prompt(python_code, target_language, add_comments)
         
         try:
-            response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=15000,
-                temperature=0.1,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": f"You are an expert programmer. {prompt}"
-                    }
-                ]
-            )
-            
-            return response.content[0].text.strip()
+            if stream:
+                return self._generate_streaming(prompt)
+            else:
+                return self._generate_complete(prompt)
             
         except Exception as e:
             raise Exception(f"Claude API call failed: {str(e)}")
+    
+    def _generate_streaming(self, prompt):
+        """Generate with streaming support."""
+        with self.client.messages.stream(
+            model="claude-sonnet-4-20250514",
+            max_tokens=15000,
+            temperature=0.1,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"You are an expert programmer. {prompt}"
+                }
+            ]
+        ) as stream:
+            generated_text = ""
+            for text in stream.text_stream:
+                generated_text += text
+                yield generated_text
+    
+    def _generate_complete(self, prompt):
+        """Generate complete response at once."""
+        response = self.client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=15000,
+            temperature=0.1,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"You are an expert programmer. {prompt}"
+                }
+            ]
+        )
+        
+        return response.content[0].text.strip()
     
     def is_available(self) -> bool:
         """Check if Claude API key is provided."""

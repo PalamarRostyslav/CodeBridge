@@ -5,9 +5,7 @@ A Gradio-based application for converting Python code to other languages using A
 """
 
 import gradio as gr
-import os
 import traceback
-from typing import Optional, Tuple
 
 # Import core modules
 from core.models import QwenModel, OpenAIModel, ClaudeModel
@@ -74,46 +72,67 @@ class CodeConverterApp:
         target_language: str, 
         model_name: str, 
         add_comments: bool,
-        api_key: str
-    ) -> str:
+        api_key: str,
+        stream_response: bool
+    ):
         """Convert Python code to target language using selected model."""
         try:
             if not python_code.strip():
-                return "❌ **Error:** Please provide Python code to convert."
+                yield "❌ **Error:** Please provide Python code to convert."
+                return
             
-            # Validate Python syntax
             is_valid, error_msg = self.validator.validate_python_code(python_code)
             if not is_valid:
-                return f"❌ **Invalid Python Code:** {error_msg}"
+                yield f"❌ **Invalid Python Code:** {error_msg}"
+                return
             
             # Update API key if provided
             if api_key and api_key.strip():
                 key_update_msg = self.update_api_key(model_name, api_key.strip())
                 if "Failed" in key_update_msg:
-                    return key_update_msg
+                    yield key_update_msg
+                    return
             
             # Get the selected model
             model = self.models.get(model_name)
             if not model:
-                return f"❌ **Error:** Unknown model: {model_name}"
+                yield f"❌ **Error:** Unknown model: {model_name}"
+                return
             
             # Check if model is available
             if not model.is_available():
                 if "OpenAI" in model_name:
-                    return "❌ **Error:** OpenAI API key is required. Please provide your API key."
+                    yield "❌ **Error:** OpenAI API key is required. Please provide your API key."
+                    return
                 elif "Claude" in model_name:
-                    return "❌ **Error:** Claude API key is required. Please provide your API key."
+                    yield "❌ **Error:** Claude API key is required. Please provide your API key."
+                    return
                 elif "Qwen" in model_name:
-                    return "❌ **Error:** Qwen model is not available. Please check CUDA installation and model files."
+                    yield "❌ **Error:** Qwen model is not available. Please check CUDA installation and model files."
+                    return
             
-            # Convert the code
-            converted_code = model.convert_code(python_code, target_language, add_comments)
-            
-            return f"✅ **Conversion Successful**\n\n```{target_language.lower()}\n{converted_code}\n```"
+            # Convert the code with streaming support
+            if stream_response:
+                yield "🔄 **Starting conversion...**"
+                
+                stream_generator = model.convert_code(python_code, target_language, add_comments, stream=True)
+                
+                partial_content = ""
+                for partial_response in stream_generator:
+                    partial_content = partial_response
+                    formatted_output = f"🔄 **Generating...**\n\n```{target_language.lower()}\n{partial_content}\n```"
+                    yield formatted_output
+                
+                final_output = f"✅ **Conversion Successful**\n\n```{target_language.lower()}\n{partial_content}\n```"
+                yield final_output
+            else:
+                converted_code = model.convert_code(python_code, target_language, add_comments, stream=False)
+                final_output = f"✅ **Conversion Successful**\n\n```{target_language.lower()}\n{converted_code}\n```"
+                yield final_output
             
         except Exception as e:
             error_trace = traceback.format_exc()
-            return f"❌ **Conversion Failed:** {str(e)}\n\n**Debug Info:**\n```\n{error_trace}\n```"
+            yield f"❌ **Conversion Failed:** {str(e)}\n\n**Debug Info:**\n```\n{error_trace}\n```"
     
     def execute_python_code(self, python_code: str) -> str:
         """Execute Python code and return results."""
@@ -126,7 +145,7 @@ class CodeConverterApp:
                 return f"❌ **Invalid Python Code:** {error_msg}"
             
             result = self.python_executor.execute(python_code)
-            return result.format_results()
+            return result.format_result()
             
         except Exception as e:
             return f"❌ **Execution Failed:** {str(e)}"
@@ -147,14 +166,13 @@ class CodeConverterApp:
                 supported = ", ".join(self.docker_executor.get_supported_languages())
                 return f"❌ **Error:** Language '{target_language}' is not supported. Supported languages: {supported}"
             
-            # Execute using Docker
             result = self.docker_executor.execute(code, target_language)
-            return result.format_results()
+            return result.format_result()
             
         except Exception as e:
             return f"❌ **Execution Failed:** {str(e)}"
     
-    def save_converted_code(self, converted_code: str, target_language: str) -> str:
+    def save_converted_code(self, converted_code: str, target_language: str, custom_path: str = "") -> str:
         """Save converted code to file."""
         try:
             if not converted_code.strip():
@@ -162,7 +180,9 @@ class CodeConverterApp:
             
             code = self._clean_code_output(converted_code)
             
-            filepath = self.file_manager.save_code_to_file(code, target_language)
+            save_path = custom_path.strip() if custom_path.strip() else None
+            
+            filepath = self.file_manager.save_code_to_file(code, target_language, save_path=save_path)
             return f"✅ **File Saved Successfully**\n\nSaved to: `{filepath}`"
             
         except Exception as e:
@@ -270,18 +290,30 @@ class CodeConverterApp:
                         value=False
                     )
                     
+                    stream_response = gr.Checkbox(
+                        label="Stream response (real-time generation)",
+                        value=False
+                    )
+                    
                     convert_btn = gr.Button("🔄 Convert Code", variant="primary", size="lg")
                 
                 with gr.Column(scale=1):
                     # Output section
                     gr.Markdown("## 💻 Generated Code")
                     
-                    converted_output = gr.Textbox(
+                    converted_output = gr.Code(
                         label="Converted Code",
-                        lines=12,
+                        lines=10,   
                         elem_classes=["code-output"],
                         interactive=True
                     )
+                    
+                    with gr.Row():
+                        save_path_input = gr.Textbox(
+                            label="Save Directory (optional)",
+                            placeholder="Leave empty to save in current directory",
+                            lines=1
+                        )
                     
                     with gr.Row():
                         save_btn = gr.Button("💾 Save Code", variant="secondary")
@@ -326,7 +358,7 @@ class CodeConverterApp:
             
             convert_btn.click(
                 fn=self.convert_code,
-                inputs=[python_input, target_language, model_selection, add_comments, api_key_input],
+                inputs=[python_input, target_language, model_selection, add_comments, api_key_input, stream_response],
                 outputs=[converted_output]
             )
             
@@ -344,7 +376,7 @@ class CodeConverterApp:
             
             save_btn.click(
                 fn=self.save_converted_code,
-                inputs=[converted_output, target_language],
+                inputs=[converted_output, target_language, save_path_input],
                 outputs=[save_status]
             )
             
@@ -407,18 +439,22 @@ def main():
         print(f"⚠️ Docker: {e}")
     
     # Initialize and run app
-    app = CodeConverterApp()
-    interface = app.create_interface()
-    
-    print("\n🌐 Starting Gradio interface...")
-    print("📱 Access the app at: http://localhost:7860")
-    
-    interface.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        share=False,
-        show_error=True
-    )
+    try:
+        app = CodeConverterApp()
+        interface = app.create_interface()
+        
+        print("\n🌐 Starting Gradio interface...")
+        print("📱 Access the app at: http://localhost:7860")
+        
+        interface.launch(
+            server_name="0.0.0.0",
+            server_port=7860,
+            share=False,
+            show_error=True
+        )
+    except Exception as e:
+        print(f"❌ Failed to start application: {e}")
+        print("Please check your configuration and dependencies.")
 
 
 if __name__ == "__main__":
